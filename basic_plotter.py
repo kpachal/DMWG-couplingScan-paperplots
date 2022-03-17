@@ -8,10 +8,13 @@ from shapely.geometry import Polygon as shapely_pol
 from shapely.ops import unary_union
 from shapely import validation
 from matplotlib.path import Path
-from matplotlib.patches import Polygon
-from matplotlib.colors import ColorConverter
-
+from matplotlib.patches import Polygon,FancyBboxPatch
+from matplotlib.colors import ColorConverter,ListedColormap, LinearSegmentedColormap,rgb2hex
+from matplotlib import cm
 import colorsys
+
+# This is just how many points we get - should be enough for anything
+colourmap = cm.get_cmap('Blues_r', 200)
 
 def get_aspect_ratio(ax) :
   ratio = 1.0
@@ -25,6 +28,12 @@ def scale_lightness(matplotlib_col, scale_l):
     h, l, s = colorsys.rgb_to_hls(*rgb)
     # manipulate h, l, s values and return as rgb
     return colorsys.hls_to_rgb(h, min(1, l * scale_l), s = s)
+
+def get_colours(npoints):
+    # Ignore the last 20% of the scale to keep from approaching white too closely
+    breaks = [float(i)/(npoints*1.2) for i in range(npoints)]
+    colours = [rgb2hex(colourmap(bb)) for bb in breaks]
+    return colours
 
 def get_contours(xvals, yvals, zvals) :
 
@@ -107,7 +116,7 @@ def drawContourPlotRough(grid_list, addPoints = False, this_tag = "default", plo
   ratio = get_aspect_ratio(ax)
   ax.set_aspect(ratio)
 
-  ax.set_xlabel("m$_{ZA}$ [GeV]")
+  ax.set_xlabel("m$_{\rm med}$ [GeV]")
   ax.set_ylabel("m$_{\chi}$ [GeV]")   
 
   # Add text
@@ -165,20 +174,24 @@ def drawMassMassPlot(contour_groups, legend_lines, this_tag = "default", plot_pa
     ratio = get_aspect_ratio(ax)
     ax.set_aspect(ratio)
 
-    ax.set_xlabel("m$_{ZA}$ [GeV]")
-    ax.set_ylabel("m$_{\chi}$ [GeV]")   
+    ax.set_xlabel(r"M$_{\rm med}$ [GeV]")
+    ax.set_ylabel("m$_{\chi}$ [GeV]")
+
+    # For text and legend
+    transluscent = ColorConverter.to_rgba('w', alpha=0.8)
+    boxstyle = dict(boxstyle='round', facecolor=transluscent, edgecolor='w')  
 
     if addText :
         if addText.count('\n') == 1 :
-            plt.figtext(0.23,0.77,addText,size=14)
+            plt.figtext(0.25,0.77,addText,size=14,bbox=boxstyle)
         elif addText.count('\n') == 2 :
-            plt.figtext(0.23,0.72,addText,size=14)
-        else : plt.figtext(0.23,0.82,addText,size=14)
+            plt.figtext(0.25,0.72,addText,size=14,bbox=boxstyle)
+        else : plt.figtext(0.25,0.82,addText,size=14,bbox=boxstyle)
 
     # Need 3 cute colours
     if is_scaling :
         ncols = len(contour_groups)
-        fill_colours = [scale_lightness('cornflowerblue',0.5+i*1.0/ncols) for i in range(ncols)]
+        fill_colours = get_colours(ncols)#[scale_lightness('cornflowerblue',0.5+i*1.0/ncols) for i in range(ncols)]
         line_colours = fill_colours
         line_width = 1
     else :
@@ -194,70 +207,9 @@ def drawMassMassPlot(contour_groups, legend_lines, this_tag = "default", plot_pa
             else :
                 patch = Polygon(list(contour.exterior.coords), facecolor=face_col, edgecolor=line_col, zorder=2, label="_",linewidth=line_width) # alpha=fillOpacity,
             ax.add_patch(patch)
-    ax.legend(fontsize=14)
+    ax.legend(fontsize=14,loc='lower right',facecolor=transluscent,edgecolor='w')
 
     #plt.savefig(plot_path+'/massmass_{0}.eps'.format(this_tag),bbox_inches='tight')
     plt.savefig(plot_path+'/massmass_{0}.pdf'.format(this_tag),bbox_inches='tight')
 
-    plt.close(fig)    
-
-def drawDDPlot(contour_groups, legend_lines, this_tag = "default", plot_path = "plots", addText = "",ylabel="\sigma",is_scaling=False, transluscent=False, xhigh=None, ylow=None,yhigh=None) :
-
-    # Check output
-    if not os.path.exists(plot_path) :
-        os.makedirs(plot_path)
-
-    # Object for plotting
-    fig,ax=plt.subplots(1,1)
-
-    usexhigh = xhigh if xhigh else 2000
-    useylow = ylow if ylow else 1e-46
-    useyhigh = yhigh if yhigh else 1e-37
-    ax.set_xlim(1, usexhigh)
-    ax.set_ylim(useylow,useyhigh)
-    plt.rc('font',size=16)
-    ax.set_xscale('log')
-    ax.set_yscale('log')
-    #plt.rc('font',size=16)
-
-    ax.set_xlabel("m$_{\chi}$ [GeV]", fontsize=16)
-    ax.set_ylabel(ylabel, fontsize=16)
-
-    if addText :
-        if addText.count('\n') == 1 :
-            plt.figtext(0.16,0.15,addText,size=14)
-        elif addText.count('\n') == 2 :
-            plt.figtext(0.16,0.19,addText,size=14)
-        else : plt.figtext(0.16,0.23,addText,size=14)
-
-    # Need 3 cute colours
-    if is_scaling :
-        ncols = len(contour_groups)
-        fill_colours = [scale_lightness('cornflowerblue',0.5+i*1.0/ncols) for i in range(ncols)]
-        if transluscent :
-          fill_colours = [ColorConverter.to_rgba(col, alpha=0.5) for col in fill_colours]
-          line_colours = ['black' for i in fill_colours]
-        else :
-          line_colours = fill_colours          
-        line_width = 1
-    else :
-        colours_raw = ['cornflowerblue','turquoise','mediumorchid']
-        fillOpacity = 0.5
-        fill_colours = [ColorConverter.to_rgba(col, alpha=fillOpacity) for col in colours_raw]
-        line_colours = colours_raw
-        line_width = 2
-    for contour_group,label_line,face_col,line_col in zip(contour_groups,legend_lines,fill_colours,line_colours) :
-        for index, contour in enumerate(contour_group) :
-            if len(list(contour.exterior.coords)) == 0 : continue
-            if index == 0 :
-                patch = Polygon(list(contour.exterior.coords), facecolor=face_col, edgecolor=line_col, zorder=2, label=label_line,linewidth=line_width) 
-            else :
-                patch = Polygon(list(contour.exterior.coords), facecolor=face_col, edgecolor=line_col, zorder=2, label="_",linewidth=line_width)
-            ax.add_patch(patch)
-    ax.legend(fontsize=14)
-
-    plt.savefig(plot_path+'/directdetection_{0}.pdf'.format(this_tag),bbox_inches='tight')
-
-    plt.close(fig)    
-            
-
+    plt.close(fig)

@@ -15,8 +15,8 @@ input_path = "../inputs/"
 plot_path = "plots/validation"
 
 # Couplings to test: you'll get a grid of all combinations
-test_gq = [0.25,0.15,0.1,0.05,0.01]
-test_gdm = [1.0,0.8,0.6,0.4,0.2]
+test_gq = [0.25,0.15,0.1,0.05]
+test_gdm = [1.0,0.75,0.5,0.25]
 test_gl = [0.1,0.05,0.01,0.0]
 
 plotlims = (3500,1700)

@@ -49,6 +49,15 @@ def make_plot(xvals, yvals, zvals, this_tag, addText=None, addCurves=None, addPo
   plt.rc('font',size=17)
   ratio = get_aspect_ratio(ax)
   ax.set_aspect(ratio)
+
+  # For visual cleanliness, extend contour down to bottom axis by adding mirror of points
+  # across y = 0.
+  mirrored_points = [(x, -y, z) for x, y, z in zip(xvals,yvals,zvals) if y < 30]
+  for point in mirrored_points :
+    xvals = np.append(xvals, point[0])
+    yvals = np.append(yvals, point[1])
+    zvals = np.append(zvals, point[2])
+
   cp = ax.tricontourf(xvals, yvals, zvals, levels=levels, cmap='Blues_r')
   fig.colorbar(cp)
 
@@ -68,7 +77,7 @@ def make_plot(xvals, yvals, zvals, this_tag, addText=None, addCurves=None, addPo
     ax.scatter(xnon,ynon,color='red', marker='o',facecolors='none',linewidths=2)
     ax.scatter(xexcl,yexcl,color='white', marker='o',facecolors='none',linewidths=2)
 
-  ax.set_xlabel("m$_{ZA}$ [GeV]")
+  ax.set_xlabel(r"M$_{\rm med}$ [GeV]")
   ax.set_ylabel("m$_{\chi}$ [GeV]")   
 
   # Now add exclusion contour (if not doing official - harder to see with both)

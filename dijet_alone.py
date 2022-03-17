@@ -2,6 +2,9 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from matplotlib.patches import Polygon,FancyBboxPatch
+from matplotlib.colors import ColorConverter,ListedColormap, LinearSegmentedColormap,rgb2hex
+from matplotlib import cm
 
 from couplingscan.scan import *
 from couplingscan.rescaler import *
@@ -47,7 +50,7 @@ def make_plot(xvals, yvals, zvals, this_tag, addText=None, addCurves=None, addPo
     ax.scatter(xnon,ynon,color='red', marker='o',facecolors='none',linewidths=1,s=1)
     ax.scatter(xexcl,yexcl,color='white', marker='o',facecolors='none',linewidths=1,s=1)
 
-  ax.set_xlabel("m$_{ZA}$ [GeV]")
+  ax.set_xlabel(r"M$_{\rm med}$ [GeV]")
   ax.set_ylabel("m$_{\chi}$ [GeV]")   
 
   # Now add exclusion contour
@@ -58,9 +61,13 @@ def make_plot(xvals, yvals, zvals, this_tag, addText=None, addCurves=None, addPo
     for curve in addCurves :
       ax.add_line(curve)
 
+  # For text and legend
+  transluscent = ColorConverter.to_rgba('w', alpha=0.8)
+  boxstyle = dict(boxstyle='round', facecolor=transluscent, edgecolor='w')  
+
   # Add text
   if addText :
-    plt.figtext(0.2,0.75,addText,size=14,bbox=dict(facecolor='white', alpha=0.75))
+    plt.figtext(0.2,0.75,addText,size=14,bbox=boxstyle)
     #plt.figtext(0.2,0.75,addText,backgroundcolor="white",size=14)
 
   plt.savefig('plots/{0}_{1}.eps'.format(analysis_tag,this_tag),bbox_inches='tight')
