@@ -98,7 +98,7 @@ def merge_exclusions(contour_list) :
 
     return poly_list 
 
-def drawContourPlotRough(grid_list, addPoints = False, this_tag = "default", plot_path = "plots", addText = "", xhigh=None, yhigh=None) :
+def drawContourPlotRough(grid_list, addPoints = False, this_tag = "default", plot_path = "plots", addText = "", xhigh=None, yhigh=None,vsCoupling=False) :
 
   # Check output
   if not os.path.exists(plot_path) :
@@ -116,8 +116,12 @@ def drawContourPlotRough(grid_list, addPoints = False, this_tag = "default", plo
   ratio = get_aspect_ratio(ax)
   ax.set_aspect(ratio)
 
-  ax.set_xlabel("m$_{\rm med}$ [GeV]")
-  ax.set_ylabel("m$_{\chi}$ [GeV]")   
+  ax.set_xlabel(r"m$_{\rm med}$ [GeV]")
+  if vsCoupling :
+    ax.set_ylabel("Coupling")
+    #ax.set_yscale('log')
+  else :
+    ax.set_ylabel("m$_{\chi}$ [GeV]")   
 
   # Add text
   if addText :
@@ -151,7 +155,10 @@ def drawContourPlotRough(grid_list, addPoints = False, this_tag = "default", plo
   fig.colorbar(cp)
 
   #plt.savefig(plot_path+'/massmass_{0}.eps'.format(this_tag),bbox_inches='tight')
-  plt.savefig(plot_path+'/massmass_{0}.pdf'.format(this_tag),bbox_inches='tight')
+  if not vsCoupling :
+    plt.savefig(plot_path+'/massmass_{0}.pdf'.format(this_tag),bbox_inches='tight')
+  else :
+    plt.savefig(plot_path+'/couplingmass_{0}.pdf'.format(this_tag),bbox_inches='tight')
 
   plt.close(fig)
 
