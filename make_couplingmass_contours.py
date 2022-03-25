@@ -75,9 +75,9 @@ target_xgrid, target_ygrid = np.meshgrid(target_mmed_vals,target_mdm_vals)
 
 # Start by creating a mass-mass scan with baseline couplings and a rescaler. 
 # We'll use this for dijets.
-target_scan_A1 = DMAxialModelScan(mmed=target_xgrid.flatten(),mdm=target_ygrid.flatten(),
-  gq=0.25, gdm=1.0, gl=0.0)  
-rescaler_fromA1_dijetgrid = Rescaler(target_scan_A1)
+target_scan_A2 = DMAxialModelScan(mmed=target_xgrid.flatten(),mdm=target_ygrid.flatten(),
+  gq=0.25, gdm=1.0, gl=0.1)  
+rescaler_fromA2_dijetgrid = Rescaler(target_scan_A2)
 
 # Get dijet data: we are beginning from gq limit for simplicity.
 # Extract HEPData into useable format
@@ -98,7 +98,49 @@ gq_limit = CouplingLimit_Dijet(
     gl=0.0,
     coupling='vector'
 )
-dijet_exdepth_A1 = gq_limit.extract_exclusion_depths(target_scan_A1)
+dijet_exdepth_A2 = gq_limit.extract_exclusion_depths(target_scan_A2)
+
+# Get dilepton data:
+# Extract HEPData into useable format
+with open("dilepton_data/hepdata_observed_xseclimits_atlas139ifb.json", "r") as read_file:
+  data = json.load(read_file)
+values = data["values"]
+widths = data["qualifiers"]["RELATIVE WIDTH"]
+# And convert to x-y numpy arrays
+xlist_dilepton = np.array([val["x"][0]["value"] for val in values]).astype(float)
+ylists = {}
+for group in range(6) :
+  ylist = np.array([val["y"][group]["value"] for val in values]).astype(float)
+  width = widths[group]["value"]
+  float_width = float(width.replace(" %",""))
+  frac_width = float_width/100
+  ylists[frac_width] = ylist
+
+# Read in our theory curve - very approximate but will work for this test
+xvals_th_dil = []
+yvals_th_dil = []
+with open("dilepton_data/approximate_theorycurve.txt", "r") as read_file:
+  lines = read_file.readlines()
+  for line in lines :
+    tokens = line.split(", ")
+    xvals_th_dil.append(1000*float(tokens[0])) # this was in TeV
+    yvals_th_dil.append(float(tokens[1]))
+x_theory_dilepton = np.array(xvals_th_dil)
+y_theory_dilepton = np.array(yvals_th_dil)
+
+# Now create a visible limit object with this, and extract our 2d limits from it.
+dilepton_limit = CrossSectionLimit_Dilepton(
+    mmed_limit=xlist_dilepton,
+    xsec_limit=ylists,
+    mmed_theory=x_theory_dilepton,
+    xsec_theory=y_theory_dilepton,
+    mdm=2.5,
+    gq=0.1,
+    gdm=1.0,
+    gl=0.01,
+    coupling='vector'
+)
+dilepton_exdepth_A2 = dilepton_limit.extract_exclusion_depths(target_scan_A2)
 
 # Get monophoton data:
 # Extract HEPData into useable format
@@ -131,8 +173,10 @@ monophoton_sfs_A1toV1 = rescaler_fromA1_monophotongrid.rescale_by_hadronic_xsec_
 # Storage
 monophoton_contours_axial = {}
 dijet_contours_axial = {}
+dilepton_contours_axial = {}
 monophoton_contours_vector = {}
 dijet_contours_vector = {}
+dilepton_contours_vector = {}
 
 # Now we're going to loop over our scenarios, going straight to contours and plots.
 for test_scenario in test_coupling_scenarios.keys() :
@@ -142,20 +186,24 @@ for test_scenario in test_coupling_scenarios.keys() :
   test_gl = test_coupling_scenarios[test_scenario]["test_gl"]
 
   # Collect a range of interesting axial model scale factors for both of these, including A2
-  dijet_sfs_allaxial_fromA1 = rescaler_fromA1_dijetgrid.rescale_by_br_quarks(test_gq,test_gdm, test_gl,'axial')
+  dijet_sfs_allaxial_fromA2 = rescaler_fromA2_dijetgrid.rescale_by_br_quarks(test_gq,test_gdm, test_gl,'axial')
   monophoton_sfs_allaxial_fromA1 = rescaler_fromA1_monophotongrid.rescale_by_propagator(test_gq,test_gdm,test_gl,'axial')
+  dilepton_sfs_allaxial_fromA2 = rescaler_fromA2_dijetgrid.rescale_by_br_leptons(test_gq,test_gdm, test_gl, 'axial')
 
   # Compute actual exclusion depths for axial
   monophoton_exclusiondepths_axial = {k : zlist_monophoton/v for k, v in monophoton_sfs_allaxial_fromA1.items()}
-  dijet_exclusiondepths_axial = {k : dijet_exdepth_A1/v for k, v in dijet_sfs_allaxial_fromA1.items()}
+  dijet_exclusiondepths_axial = {k : dijet_exdepth_A2/v for k, v in dijet_sfs_allaxial_fromA2.items()}
+  dilepton_exclusiondepths_axial = {k : dilepton_exdepth_A2/v for k, v in dilepton_sfs_allaxial_fromA2.items()}
 
   # And some vector scans.
-  dijet_sfs_allvector_fromA1 = rescaler_fromA1_dijetgrid.rescale_by_br_quarks(test_gq,test_gdm,test_gl,'vector')
+  dijet_sfs_allvector_fromA2 = rescaler_fromA2_dijetgrid.rescale_by_br_quarks(test_gq,test_gdm,test_gl,'vector')
   monophoton_sfs_allvector_fromV1 = rescaler_fromV1_monophotongrid.rescale_by_propagator(test_gq,test_gdm,test_gl,'vector')
+  dilepton_sfs_allvector_fromA2 = rescaler_fromA2_dijetgrid.rescale_by_br_leptons(test_gq,test_gdm,test_gl,'vector')
 
   # Compute actual exclusion depths for both
-  dijet_exclusiondepths_vector = {k : dijet_exdepth_A1/v for k, v in dijet_sfs_allvector_fromA1.items()}
-  monophoton_exclusiondepths_vector = {k : zlist_monophoton/(monophoton_sfs_A1toV1*v) for k, v in monophoton_sfs_allvector_fromV1.items()}     
+  dijet_exclusiondepths_vector = {k : dijet_exdepth_A2/v for k, v in dijet_sfs_allvector_fromA2.items()}
+  monophoton_exclusiondepths_vector = {k : zlist_monophoton/(monophoton_sfs_A1toV1*v) for k, v in monophoton_sfs_allvector_fromV1.items()}
+  dilepton_exclusiondepths_vector = {k : dilepton_exdepth_A2/v for k, v in dilepton_sfs_allvector_fromA2.items()}
 
   # For each test scenario, we actually have several sub-tests based on the grid of the non-scanned couplings.
   if "gq_lim" in test_scenario :
@@ -184,8 +232,10 @@ for test_scenario in test_coupling_scenarios.keys() :
       yvals = []
       zvals_mono_axial = []
       zvals_dijet_axial = []
+      zvals_dilep_axial = []
       zvals_mono_vector = []
       zvals_dijet_vector = []      
+      zvals_dilep_vector = []
       # Monojet needs mirroring because it doesn't actually go to zero. Double everything.
       use_xvals_mono = np.concatenate((xlist_monophoton,xlist_monophoton))
       use_yvals_mono = np.concatenate((ylist_monophoton,-1.0*ylist_monophoton))
@@ -207,11 +257,19 @@ for test_scenario in test_coupling_scenarios.keys() :
 
         # Dijet extraction
         depths_dijet_axial = dijet_exclusiondepths_axial[tuple(full_couplings)]
-        zvals_dijet_axial_raw = interpolate.griddata((target_scan_A1.mmed, target_scan_A1.mdm), depths_dijet_axial, (mMed_test, mDM_test),method='linear')
+        zvals_dijet_axial_raw = interpolate.griddata((target_scan_A2.mmed, target_scan_A2.mdm), depths_dijet_axial, (mMed_test, mDM_test),method='linear')
         zvals_dijet_axial += list(zvals_dijet_axial_raw)
         depths_dijet_vector = dijet_exclusiondepths_vector[tuple(full_couplings)]
-        zvals_dijet_vector_raw = interpolate.griddata((target_scan_A1.mmed, target_scan_A1.mdm), depths_dijet_vector, (mMed_test, mDM_test),method='linear')
-        zvals_dijet_vector += list(zvals_dijet_vector_raw)       
+        zvals_dijet_vector_raw = interpolate.griddata((target_scan_A2.mmed, target_scan_A2.mdm), depths_dijet_vector, (mMed_test, mDM_test),method='linear')
+        zvals_dijet_vector += list(zvals_dijet_vector_raw)
+
+        # Dilepton extraction
+        depths_dilepton_axial = dilepton_exclusiondepths_axial[tuple(full_couplings)]
+        zvals_dilep_axial_raw = interpolate.griddata((target_scan_A2.mmed, target_scan_A2.mdm), depths_dilepton_axial, (mMed_test, mDM_test),method='linear')
+        zvals_dilep_axial += list(zvals_dilep_axial_raw)
+        depths_dilepton_vector = dilepton_exclusiondepths_vector[tuple(full_couplings)]
+        zvals_dilep_vector_raw = interpolate.griddata((target_scan_A2.mmed, target_scan_A2.mdm), depths_dilepton_vector, (mMed_test, mDM_test),method='linear')
+        zvals_dilep_vector += list(zvals_dilep_axial_raw)
 
       thiskey = "axial_{0}_{1}_".format(test_scenario,hypothesis)+others_tag.format(other_one, other_two)
 
@@ -227,6 +285,12 @@ for test_scenario in test_coupling_scenarios.keys() :
         drawContourPlotRough([[cleanx_dijet, cleany_dijet, cleanz_dijet]], addPoints = False, this_tag = thiskey+"_dijet",plot_path = plot_path, xhigh=3000.,yhigh=0.5,vsCoupling=True)
         dijet_contours_axial[thiskey] = get_contours(cleanx_dijet, cleany_dijet, cleanz_dijet)[0]
 
+      cleanx_dilep, cleany_dilep, cleanz_dilep = clean_grid(np.array(xvals), np.array(yvals), np.array(zvals_dilep_axial))
+      if cleanz_dilep.size > 0 :
+        # Make a quick plot to check this looks sane
+        drawContourPlotRough([[cleanx_dilep, cleany_dilep, cleanz_dilep]], addPoints = False, this_tag = thiskey+"_dilepton",plot_path = plot_path, xhigh=3000.,yhigh=0.5,vsCoupling=True)
+        dilepton_contours_axial[thiskey] = get_contours(cleanx_dilep, cleany_dilep, cleanz_dilep)[0]        
+
       thiskey = "vector_{0}_{1}_".format(test_scenario,hypothesis)+others_tag.format(other_one, other_two)
 
       cleanx_mono, cleany_mono, cleanz_mono = clean_grid(np.array(xvals), np.array(yvals), np.array(zvals_mono_vector))
@@ -241,60 +305,56 @@ for test_scenario in test_coupling_scenarios.keys() :
         drawContourPlotRough([[cleanx_dijet, cleany_dijet, cleanz_dijet]], addPoints = False, this_tag = thiskey+"_dijet",plot_path = plot_path, xhigh=3000.,yhigh=0.5,vsCoupling=True)
         dijet_contours_vector[thiskey] = get_contours(cleanx_dijet, cleany_dijet, cleanz_dijet)[0]
 
+      cleanx_dilep, cleany_dilep, cleanz_dilep = clean_grid(np.array(xvals), np.array(yvals), np.array(zvals_dilep_vector))
+      if cleanz_dilep.size > 0 :
+        # Make a quick plot to check this looks sane
+        drawContourPlotRough([[cleanx_dilep, cleany_dilep, cleanz_dilep]], addPoints = False, this_tag = thiskey+"_dilepton",plot_path = plot_path, xhigh=3000.,yhigh=0.5,vsCoupling=True)
+        dilepton_contours_vector[thiskey] = get_contours(cleanx_dilep, cleany_dilep, cleanz_dilep)[0]        
+
 # Save outputs in a clean way so that plot making script can be separate without re-running.
 # Also save some TGraphs for easy cross checks.
 with open("vector_exclusion_depths_couplingmass.pkl", "wb") as outfile_vec_depths :
   out_dict = {"dijet" : dijet_exclusiondepths_vector,
-              "monophoton" : monophoton_exclusiondepths_vector}
+              "monophoton" : monophoton_exclusiondepths_vector,
+              "dilepton" : dilepton_exclusiondepths_vector}
   pickle.dump(out_dict, outfile_vec_depths)
 with open("axial_exclusion_depths_couplingmass.pkl", "wb") as outfile_axial_depths :
   out_dict = {"dijet" : dijet_exclusiondepths_axial,
-              "monophoton" : monophoton_exclusiondepths_axial}
+              "monophoton" : monophoton_exclusiondepths_axial,
+              "dilepton" : dilepton_exclusiondepths_axial}
   pickle.dump(out_dict, outfile_axial_depths)    
 with open("vector_exclusion_contours_couplingmass.pkl", "wb") as poly_file:
   out_dict = {"dijet" : dijet_contours_vector,
-              "monophoton" : monophoton_contours_vector}
+              "monophoton" : monophoton_contours_vector,
+              "dilepton" : dilepton_contours_vector}
   pickle.dump(out_dict, poly_file, pickle.HIGHEST_PROTOCOL)    
 with open("axial_exclusion_contours_couplingmass.pkl", "wb") as poly_file:
   out_dict = {"dijet" : dijet_contours_axial,
-              "monophoton" : monophoton_contours_axial}
+              "monophoton" : monophoton_contours_axial,
+              "dilepton" : dilepton_contours_axial}
   pickle.dump(out_dict, poly_file, pickle.HIGHEST_PROTOCOL)
 
-outfile_vector = ROOT.TFile.Open("vector_exclusion_contours_couplingmass.root", "RECREATE")
-outfile_vector.cd()
-for key, contour in dijet_contours_vector.items() :
-  igraph = ROOT.TGraph()
-  for icontour in contour :
-    for x, y in list(icontour.exterior.coords) :
-      igraph.AddPoint(x,y)
-  outname = key+"_dijet"
-  igraph.Write(outname)
-for key, contour in monophoton_contours_vector.items() :
-  igraph = ROOT.TGraph()
-  for icontour in contour :
-    for x, y in list(icontour.exterior.coords) :
-      igraph.AddPoint(x,y)
-  outname = key+"_monophoton"
-  igraph.Write(outname)
-outfile_vector.Close()
-
-outfile_axial = ROOT.TFile.Open("axial_exclusion_contours_couplingmass.root", "RECREATE")
-outfile_axial.cd()
-for key, contour in dijet_contours_axial.items() :
-  igraph = ROOT.TGraph()
-  for icontour in contour :
-    for x, y in list(icontour.exterior.coords) :
-      igraph.AddPoint(x,y)
-  outname = key+"_dijet"
-  igraph.Write(outname)
-for key, contour in monophoton_contours_axial.items() :
-  igraph = ROOT.TGraph()
-  for icontour in contour :
-    for x, y in list(icontour.exterior.coords) :
-      igraph.AddPoint(x,y)
-  outname = key+"_monophoton"
-  igraph.Write(outname)
-outfile_axial.Close()
+# And some TGraphs for ease
+big_ol_dict = {
+  "vector" : {"dijet" : dijet_contours_vector,
+              "monophoton" : monophoton_contours_vector,
+              "dilepton" : dilepton_contours_vector},
+  "axial" : {"dijet" : dijet_contours_axial,
+              "monophoton" : monophoton_contours_axial,
+              "dilepton" : dilepton_contours_axial}
+}
+for model, middict in big_ol_dict.items() :
+  outfile = ROOT.TFile.Open("{0}_exclusion_contours_couplingmass.root".format(model), "RECREATE")
+  outfile.cd()    
+  for analysis, smalldict in middict.items() :
+    for key, contour in smalldict.items() :
+      igraph = ROOT.TGraph()
+      for icontour in contour :
+        for x, y in list(icontour.exterior.coords) :
+          igraph.AddPoint(x,y)
+      outname = "{0}_{1}".format(key,analysis)
+      igraph.Write(outname)
+outfile.Close()
 
 # And finally save original one for comparison
 outfile_orig = ROOT.TFile.Open("original_dijet_gqlim.root","RECREATE")
