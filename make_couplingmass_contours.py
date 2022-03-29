@@ -73,11 +73,10 @@ target_gvals = np.logspace(np.log10(0.01),0,101)
 
 target_xgrid, target_ygrid = np.meshgrid(target_mmed_vals,target_mdm_vals)
 
-# Start by creating a mass-mass scan with baseline couplings and a rescaler. 
+# Start by creating a mass-mass scan with baseline couplings. 
 # We'll use this for dijets.
 target_scan_A2 = DMAxialModelScan(mmed=target_xgrid.flatten(),mdm=target_ygrid.flatten(),
   gq=0.25, gdm=1.0, gl=0.1)  
-rescaler_fromA2_dijetgrid = Rescaler(target_scan_A2)
 
 # Get dijet data: we are beginning from gq limit for simplicity.
 # Extract HEPData into useable format
@@ -99,6 +98,8 @@ gq_limit = CouplingLimit_Dijet(
     coupling='vector'
 )
 dijet_exdepth_A2 = gq_limit.extract_exclusion_depths(target_scan_A2)
+
+rescaler_fromA2_dijetgrid = Rescaler(target_scan_A2, dijet_exdepth_A2)
 
 # Get dilepton data:
 # Extract HEPData into useable format
@@ -140,7 +141,11 @@ dilepton_limit = CrossSectionLimit_Dilepton(
     gl=0.01,
     coupling='vector'
 )
-dilepton_exdepth_A2 = dilepton_limit.extract_exclusion_depths(target_scan_A2)
+dilepton_exdepths_A2 = dilepton_limit.extract_exclusion_depths(target_scan_A2)
+dilepton_exdepth_A2 = dilepton_limit.select_depths(target_scan_A2,dilepton_exdepths_A2)
+
+# Dilepton rescaler
+rescaler_fromA2_dilepton = Rescaler(target_scan_A2,dilepton_exdepths_A2)
 
 # Get monophoton data:
 # Extract HEPData into useable format
@@ -158,17 +163,18 @@ zlist_monophoton = np.array([val["y"][0]["value"] for val in values]).astype(flo
 # It starts as A1, so we'll make our scan and rescaler from that.
 monophoton_scan_A1 = DMAxialModelScan(mmed=xlist_monophoton,mdm=ylist_monophoton,
 gq=0.25, gdm=1.0, gl=0.0)
-rescaler_fromA1_monophotongrid = Rescaler(monophoton_scan_A1)
+rescaler_fromA1_monophotongrid = Rescaler(monophoton_scan_A1, zlist_monophoton, 10.0)
 
 # Recall we only want to convert mono-x limits between models once, since it's slow.
 # So we'll go from A1 to V1 and then get other vector models from there.
-# Scans and rescaler we'll use in monophoton
-V1_scan_monophotongrid = DMVectorModelScan(mmed=xlist_monophoton, mdm=ylist_monophoton,gq=0.25, gdm=1.0, gl=0.0)
-rescaler_fromV1_monophotongrid = Rescaler(V1_scan_monophotongrid)
-# And the actual scale factors: this is the slow bit
-monophoton_sfs_A1toV1 = rescaler_fromA1_monophotongrid.rescale_by_hadronic_xsec_monox(0.25, 1.0, 0.0,'vector')[(0.25,1.0,0.0)]
+# This is the slow bit
+monophoton_limits_V1 = rescaler_fromA1_monophotongrid.rescale_by_hadronic_xsec_monox(0.25, 1.0, 0.0,'vector')[(0.25,1.0,0.0)]
 # TESTS ONLY
-#monophoton_sfs_A1toV1 = rescaler_fromA1_monophotongrid.rescale_by_parton_level_xsec_monox(0.25, 1.0, 0.0,'vector')[(0.25,1.0,0.0)]
+#monophoton_limits_V1 = rescaler_fromA1_monophotongrid.rescale_by_parton_level_xsec_monox(0.25, 1.0, 0.0,'vector')[(0.25,1.0,0.0)]
+
+# Scans and rescaler from here
+V1_scan_monophotongrid = DMVectorModelScan(mmed=xlist_monophoton, mdm=ylist_monophoton,gq=0.25, gdm=1.0, gl=0.0)
+rescaler_fromV1_monophotongrid = Rescaler(V1_scan_monophotongrid, monophoton_limits_V1, 10.0)
 
 # Storage
 monophoton_contours_axial = {}
@@ -186,24 +192,14 @@ for test_scenario in test_coupling_scenarios.keys() :
   test_gl = test_coupling_scenarios[test_scenario]["test_gl"]
 
   # Collect a range of interesting axial model scale factors for both of these, including A2
-  dijet_sfs_allaxial_fromA2 = rescaler_fromA2_dijetgrid.rescale_by_br_quarks(test_gq,test_gdm, test_gl,'axial')
-  monophoton_sfs_allaxial_fromA1 = rescaler_fromA1_monophotongrid.rescale_by_propagator(test_gq,test_gdm,test_gl,'axial')
-  dilepton_sfs_allaxial_fromA2 = rescaler_fromA2_dijetgrid.rescale_by_br_leptons(test_gq,test_gdm, test_gl, 'axial')
-
-  # Compute actual exclusion depths for axial
-  monophoton_exclusiondepths_axial = {k : zlist_monophoton/v for k, v in monophoton_sfs_allaxial_fromA1.items()}
-  dijet_exclusiondepths_axial = {k : dijet_exdepth_A2/v for k, v in dijet_sfs_allaxial_fromA2.items()}
-  dilepton_exclusiondepths_axial = {k : dilepton_exdepth_A2/v for k, v in dilepton_sfs_allaxial_fromA2.items()}
+  dijet_exclusiondepths_axial = rescaler_fromA2_dijetgrid.rescale_by_br_quarks(test_gq,test_gdm, test_gl,'axial')
+  monophoton_exclusiondepths_axial = rescaler_fromA1_monophotongrid.rescale_by_propagator(test_gq,test_gdm,test_gl,'axial')
+  #dilepton_exclusiondepths_axial = rescaler_fromA2_dijetgrid.rescale_by_br_leptons(test_gq,test_gdm, test_gl, 'axial')
 
   # And some vector scans.
-  dijet_sfs_allvector_fromA2 = rescaler_fromA2_dijetgrid.rescale_by_br_quarks(test_gq,test_gdm,test_gl,'vector')
-  monophoton_sfs_allvector_fromV1 = rescaler_fromV1_monophotongrid.rescale_by_propagator(test_gq,test_gdm,test_gl,'vector')
-  dilepton_sfs_allvector_fromA2 = rescaler_fromA2_dijetgrid.rescale_by_br_leptons(test_gq,test_gdm,test_gl,'vector')
-
-  # Compute actual exclusion depths for both
-  dijet_exclusiondepths_vector = {k : dijet_exdepth_A2/v for k, v in dijet_sfs_allvector_fromA2.items()}
-  monophoton_exclusiondepths_vector = {k : zlist_monophoton/(monophoton_sfs_A1toV1*v) for k, v in monophoton_sfs_allvector_fromV1.items()}
-  dilepton_exclusiondepths_vector = {k : dilepton_exdepth_A2/v for k, v in dilepton_sfs_allvector_fromA2.items()}
+  dijet_exclusiondepths_vector = rescaler_fromA2_dijetgrid.rescale_by_br_quarks(test_gq,test_gdm,test_gl,'vector')
+  monophoton_exclusiondepths_vector = rescaler_fromV1_monophotongrid.rescale_by_propagator(test_gq,test_gdm,test_gl,'vector')
+  #dilepton_exclusiondepths_vector = rescaler_fromA2_dijetgrid.rescale_by_br_leptons(test_gq,test_gdm,test_gl,'vector')
 
   # For each test scenario, we actually have several sub-tests based on the grid of the non-scanned couplings.
   if "gq_lim" in test_scenario :

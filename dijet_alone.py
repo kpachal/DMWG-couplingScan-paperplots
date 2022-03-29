@@ -22,6 +22,14 @@ def get_aspect_ratio(ax) :
   ybottom, ytop = ax.get_ylim()
   return abs((xright-xleft)/(ybottom-ytop))*ratio
 
+def clean_grid(xvals, yvals, zvals) :
+  if zvals.size == 0 :
+    return np.array([]), np.array([]), np.array([])
+  xclean = xvals[np.logical_and(np.logical_and(np.isfinite(xvals),np.isfinite(yvals)),np.isfinite(zvals))]
+  yclean = yvals[np.logical_and(np.logical_and(np.isfinite(xvals),np.isfinite(yvals)),np.isfinite(zvals))]
+  zclean = zvals[np.logical_and(np.logical_and(np.isfinite(xvals),np.isfinite(yvals)),np.isfinite(zvals))]
+  return xclean, yclean, zclean  
+
 def make_plot(xvals, yvals, zvals, this_tag, addText=None, addCurves=None, addPoints=False) :
 
   levels = range(26)  # Levels must be increasing.
@@ -112,14 +120,14 @@ values = gq_limit.extract_exclusion_depths(scan_A1)
 make_plot(scan_A1.mmed, scan_A1.mdm, values, "A1", addText=None, addCurves=None, addPoints=True)
 
 # Get the other three scenarios by rescaling from our scan
-rescaleA1 = Rescaler(scan_A1)
-A2_sfs = rescaleA1.rescale_by_br_quarks(target_gq=0.1,target_gdm=1,target_gl=0.1,model='axial')[(0.1,1,0.1)]
-V_sfs = rescaleA1.rescale_by_br_quarks(target_gq=[0.1,0.25],target_gdm=1,target_gl=[0.0,0.01],model='vector')
-V1_sfs = V_sfs[(0.25,1.0,0.0)]
-V2_sfs = V_sfs[(0.1,1.0,0.01)]
-make_plot(scan_A1.mmed, scan_A1.mdm, values/A2_sfs, "A2_rescaled", addPoints = True)
-make_plot(scan_A1.mmed, scan_A1.mdm, values/V1_sfs, "V1_rescaled", addPoints = True)
-make_plot(scan_A1.mmed, scan_A1.mdm, values/V2_sfs, "V2_rescaled", addPoints = True)
+rescaleA1 = Rescaler(scan_A1, values)
+A2_depths = rescaleA1.rescale_by_br_quarks(target_gq=0.1,target_gdm=1,target_gl=0.1,model='axial')[(0.1,1,0.1)]
+V_depths = rescaleA1.rescale_by_br_quarks(target_gq=[0.1,0.25],target_gdm=1,target_gl=[0.0,0.01],model='vector')
+V1_depths = V_depths[(0.25,1.0,0.0)]
+V2_depths = V_depths[(0.1,1.0,0.01)]
+make_plot(scan_A1.mmed, scan_A1.mdm, A2_depths, "A2_rescaled", addPoints = True)
+make_plot(scan_A1.mmed, scan_A1.mdm, V1_depths, "V1_rescaled", addPoints = True)
+make_plot(scan_A1.mmed, scan_A1.mdm, V2_depths, "V2_rescaled", addPoints = True)
 
 # Now get the other three scenarios via the gq plot directly.
 # Confirm they are identical.
@@ -198,8 +206,10 @@ for scanname in ["a1","v1"] :
   if "a1" in scanname : 
     text = "Axial-vector\ng$_q$=0.25, g$_\chi$=1.0, g$_l$=0.0"
     values_new_A1 = xsec_limit.extract_exclusion_depths(scan_A1)
-    make_plot(scan_A1.mmed, scan_A1.mdm, values_new_A1, "A1_fromxsec", addText=text, addCurves=draw_contours, addPoints=True)
+    x, y, z = clean_grid(scan_A1.mmed, scan_A1.mdm, values_new_A1)
+    make_plot(x, y, z, "A1_fromxsec", addText=text, addCurves=draw_contours, addPoints=True)
   else : 
     text = "Vector\ng$_q$=0.25, g$_\chi$=1.0, g$_l$=0.0"
     values_new_V1 = xsec_limit.extract_exclusion_depths(scan_V1)
-    make_plot(scan_V1.mmed, scan_V1.mdm, values_new_V1, "V1_fromxsec", addText=text, addCurves=draw_contours, addPoints=True)
+    x, y, z = clean_grid(scan_V1.mmed, scan_V1.mdm, values_new_V1)
+    make_plot(x, y, z, "V1_fromxsec", addText=text, addCurves=draw_contours, addPoints=True)
